@@ -1,9 +1,9 @@
-# RARE - Retrieval Augmented Recommendation Engine
+# GPT-Rex - A Retrieval Augmented Recommendation Engine
 
-## A Fast, Light-weight, and Powerful Vector-Based Solution
+## Fast, Light-weight, and Powerful Vector-Based Solution
 
-> RARE is a novel, RAG-powered recommendation engine that utilizes advanced NLP, prompt engineering, and linear algebra to create a unique and efficient engine.
-<img width="1303" alt="image" src="https://github.com/itsPreto/RARE/assets/45348368/925a6c97-26c8-42e1-bb90-ffac8f664527">
+> Rex is a novel, RAG-powered recommendation engine that utilizes advanced NLP, prompt engineering, and linear algebra to create a unique and efficient engine.
+<img width="1318" alt="image" src="https://github.com/itsPreto/RARE/assets/45348368/1396018b-19ea-43bd-8c05-8277bc4a95a3">
 
 ------
 
@@ -41,7 +41,7 @@ A basic frontend is provided for interacting with the recommendation engine. It 
 
 ### Setup and Running
 
-To set up and run RARE:
+To set up and run GPT-Rex:
 
 1.  Install dependencies.
 2.  Run the Flask app.
