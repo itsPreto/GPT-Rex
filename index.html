@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <script type="text/javascript" src="/___vscode_livepreview_injected_script"></script>
+    <script type="text/javascript" src="/___vscode_livepreview_injected_script"></script>
+    <script type="text/javascript" src="/___vscode_livepreview_injected_script"></script>
+    <script type="text/javascript" src="/___vscode_livepreview_injected_script"></script>
+    <script type="text/javascript" src="/___vscode_livepreview_injected_script"></script>
+    <script type="text/javascript" src="/___vscode_livepreview_injected_script"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to right, #ff00eec2, #00c9cceb);
+            text-align: -webkit-center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            background: aliceblue;
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom: 0;
+            margin-top: -20px;
+        }
+
+        p {
+            font-size: 0.9em;
+            background: linear-gradient(17deg, #603915, #ec3eb5, #0041ff, #969300);
+            margin-bottom: 24px;
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            color: transparent;
+            animation: gradientShift 4s ease-in-out infinite;
+            margin-top: 10px;
+        }
+
+        @keyframes gradientShift {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        #searchQuery {
+            padding: 10px;
+            width: 300px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            transition: border-color 0.3s;
+        }
+
+        #searchQuery:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #results {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            justify-items: center;
+            overflow-y: auto;
+            overflow-x: hidden;
+            row-gap: 16px;
+            column-gap: 32px;
+            justify-content: center;
+        }
+
+        .movie {
+            perspective: 1000px;
+        }
+
+        .movie-card-container {
+            width: 400px;
+            /* or any other suitable width */
+            height: 326px;
+            /* or any other suitable height */
+            perspective: 1000px;
+        }
+
+        .movie-card {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            cursor: pointer;
+        }
+
+        .movie-card-container:hover .movie-card {
+            transform: rotateY(180deg);
+            /* Apply the flip on hover over the container */
+        }
+
+        .movie-card:hover {
+            transform: rotateY(180deg);
+            /* Flip the card on hover */
+        }
+
+        .movie-card-front,
+        .movie-card-back {
+            position: absolute;
+            backface-visibility: hidden;
+            width: 100%;
+            height: -webkit-fill-available;
+            background-color: antiquewhite;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .movie-card-back {
+            background-color: antiquewhite;
+            transform: rotateY(180deg);
+            /* Flip the back card to face away initially */
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .movie img {
+            width: 300px;
+            height: 94%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header-container" style="width: 80%;
+    border-radius: 64px;
+    display: flow;
+    background: repeating-radial-gradient(#00000000, #f5f5f585 100px);
+    justify-items: center;">
+        <img src="assets/gpt-rex.png" alt="GPT-Rex Logo" style="width: 150px; height: auto;" />
+        <h1>GPT-Rex</h1>
+        <p>Advanced NLP + Prompt Engineering + Linear Algebra <br><br> > prototype < </p> 
+    </div>
+    <input type="text" id="searchQuery" placeholder="E.g., 'romantic comedy in Paris', 'nature documentaries '">
+    <button onclick="searchMovies()">Search</button>
+    <div id="results"></div>
+
+    <script>
+
+        // Assume the text file is named 'queries.txt' and located in the 'assets' folder
+        const queriesFilePath = 'assets/queries.txt';
+        let queries = [];
+        let currentQueryIndex = 0;
+
+        window.onload = async () => {
+            console.log('Loading queries...');
+            const response = await fetch(queriesFilePath);
+            const text = await response.text();
+            queries = text.split('\n'); // Assuming each query is on a new line
+        };
+
+        document.getElementById('searchQuery').addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault(); // Prevent the default action of moving the cursor
+                currentQueryIndex = (currentQueryIndex - 1 + queries.length) % queries.length;
+                document.getElementById('searchQuery').value = queries[currentQueryIndex];
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault(); // Prevent the default action of moving the cursor
+                currentQueryIndex = (currentQueryIndex + 1) % queries.length;
+                document.getElementById('searchQuery').value = queries[currentQueryIndex];
+            } else if (e.key === 'Enter') {
+                e.preventDefault(); // Prevent the default action of submitting the form
+                searchMovies(); // Call your search function
+            }
+        });
+
+        async function searchMovies() {
+            try {
+                const query = document.getElementById('searchQuery').value;
+                const response = await fetch('http://localhost:8080/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const movies = await response.json();
+                displayResults(movies);
+            } catch (error) {
+                console.error('Fetch error:', error);
+            }
+        }
+
+
+        function displayResults(movies) {
+            // Updated displayResults function...
+            const resultsContainer = document.getElementById('results');
+            resultsContainer.innerHTML = '';
+            movies.forEach(movie => {
+                const imageUrl = `https://image.tmdb.org/t/p/original${movie.poster_path}`;
+
+                const movieElement = document.createElement('div');
+                movieElement.className = 'movie';
+
+                movieElement.innerHTML = `
+                <div class="movie-card-container">
+                    <div class="movie-card">
+                        <div class="movie-card-front">
+                            <img crossorigin="anonymous" src="${imageUrl}" alt="${movie.title}">
+                        </div>
+                        <div class="movie-card-back">
+                            <h2>${movie.title} (${movie.vote_average})</h2>
+                            <p>${movie.overview}</p>
+                            <p>Similarity: ${movie.similarity_score.toFixed(2)}</p>
+                        </div>
+                    </div>
+                </div>`;
+                resultsContainer.appendChild(movieElement);
+            });
+        }
+
+    </script>
+</body>
+
+</html>
