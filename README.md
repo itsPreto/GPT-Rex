@@ -1,8 +1,6 @@
 # GPT-Rex - A Retrieval Augmented Recommendation Engine
 
-## Fast, Light-weight, and Powerful Vector-Based Solution
-
-> Rex is a novel, RAG-powered recommendation engine that utilizes advanced NLP, prompt engineering, and linear algebra to create a unique and efficient engine.
+> A lightweight & extremely fast, RAG-powered recommendation engine-- leveraging advanced NLP, prompt engineering, and linear algebra to create a unique and narutal search experience.
 <img width="1318" alt="image" src="https://github.com/itsPreto/RARE/assets/45348368/1396018b-19ea-43bd-8c05-8277bc4a95a3">
 
 ------
