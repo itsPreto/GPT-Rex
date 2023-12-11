@@ -1,6 +1,5 @@
 import requests
 import json
-import pprint
 
 def get_llm_annotations(movie):
     url = 'http://localhost:8080/completion'
@@ -27,7 +26,7 @@ def get_llm_annotations(movie):
     data = {
         "prompt": system_prompt,
         "temperature": 0.20,
-        }
+    }
     
     response = requests.post(url, headers=headers, json=data)
     if response.status_code == 200:
