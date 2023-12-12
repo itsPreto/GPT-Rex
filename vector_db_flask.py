@@ -6,9 +6,11 @@ import pickle
 from sentence_transformers import SentenceTransformer
 from hyperdb import HyperDB
 from flask_cors import CORS
+import requests
+
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/search": {"origins": "*"}})
 
 
 def create_and_save_db(json_file, db_file):
@@ -28,7 +30,7 @@ def load_db(db_file):
         data = pickle.load(f)
     return HyperDB(documents=data['documents'], vectors=data['vectors'], embedding_function=lambda x: x)
 
-def search_movies(query, db, original_documents, model, top_k=12):
+def search_movies(query, db, original_documents, model, top_k=50):
     query_embedding = model.encode([query])[0]
     results = db.query(query_embedding, top_k=top_k)
     response = []
@@ -41,6 +43,25 @@ def search_movies(query, db, original_documents, model, top_k=12):
         response.append(movie)
     return response
 
+# @app.route('/completion', methods=['POST'])
+# def completion_proxy():
+#     try:
+#         print(request.json)
+#         # Assuming your C++ backend completion endpoint is at http://localhost:5000/completion
+#         cpp_backend_url = 'http://localhost:5000/completion'
+
+#         # Forward the received JSON payload to the C++ backend
+#         response = requests.post(cpp_backend_url, json=request.json)
+
+#         # Check if the request to the backend was successful
+#         if response.status_code == 200:
+#             # Forward the response from the C++ backend to the frontend
+#             return jsonify(response.json()), 200
+#         else:
+#             return jsonify({'error': 'Backend request failed'}), response.status_code
+#     except requests.RequestException as e:
+#         # Handle any exceptions that occur during the request to the C++ backend
+#         return jsonify({'error': str(e)}), 500
 
 @app.route('/search', methods=['POST'])
 def search():
@@ -65,4 +86,4 @@ if __name__ == "__main__":
     with open(json_file, "r") as f:
         original_documents = json.load(f)
     model = SentenceTransformer('all-MiniLM-L6-v2')
-    app.run(debug=True, port=8080)
+    app.run(debug=True, port=8081)
