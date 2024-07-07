@@ -185,6 +185,7 @@ def chat():
             for line in response.iter_lines():
                 if line:
                     yield f"data: {line.decode('utf-8')}\n\n"
+                    logging.info(f"data: {line.decode('utf-8')}\n\n")
 
         return Response(generate(), mimetype='text/event-stream')
     except Exception as e:

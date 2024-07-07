@@ -26,7 +26,6 @@ import {
   CircularProgress,
   Zoom,
   Grow,
-  Slide,
 } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
 import SearchIcon from "@mui/icons-material/Search";
@@ -182,22 +181,6 @@ const MovieSearchApp = () => {
     setCurrentMessage("");
 
     try {
-      const eventSource = new EventSource(`${API_URL}/chat`);
-
-      eventSource.onmessage = (event) => {
-        const result = JSON.parse(event.data);
-        setChatMessages((prevMessages) => [
-          ...prevMessages,
-          { role: "assistant", content: result.message.content },
-        ]);
-      };
-
-      eventSource.onerror = (error) => {
-        console.error("Chat error:", error);
-        eventSource.close();
-        updateLog(`Chat Error: ${error.message}`, true);
-      };
-
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -208,7 +191,69 @@ const MovieSearchApp = () => {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
-      eventSource.close();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop(); // Save incomplete part for the next loop
+
+        for (const part of parts) {
+          if (part.trim()) {
+            try {
+              const data = JSON.parse(part.replace("data: ", ""));
+              const content = data.message.content;
+
+              setChatMessages((prevMessages) => {
+                const lastMessage = prevMessages[prevMessages.length - 1];
+                if (lastMessage && lastMessage.role === "assistant") {
+                  // Append to the last message if it is from the assistant
+                  lastMessage.content += content;
+                  return [...prevMessages];
+                } else {
+                  // Create a new message if the last one is not from the assistant
+                  return [
+                    ...prevMessages,
+                    { role: "assistant", content: content },
+                  ];
+                }
+              });
+            } catch (e) {
+              console.error("Error parsing JSON:", e);
+            }
+          }
+        }
+      }
+
+      // Process any remaining buffer after the loop
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.replace("data: ", ""));
+          const content = data.message.content;
+
+          setChatMessages((prevMessages) => {
+            const lastMessage = prevMessages[prevMessages.length - 1];
+            if (lastMessage && lastMessage.role === "assistant") {
+              // Append to the last message if it is from the assistant
+              lastMessage.content += content;
+              return [...prevMessages];
+            } else {
+              // Create a new message if the last one is not from the assistant
+              return [...prevMessages, { role: "assistant", content: content }];
+            }
+          });
+        } catch (e) {
+          console.error("Error parsing JSON:", e);
+        }
+      }
+
+      reader.releaseLock();
     } catch (error) {
       console.error("Chat error:", error);
       updateLog(`Chat Error: ${error.message}`, true);
