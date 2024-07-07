@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 import json
 import numpy as np
 import gzip
@@ -16,11 +16,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Configuration values
 API_URLS = {
     "generate": "http://localhost:11434/api/generate",
-    "embeddings": "http://localhost:11434/api/embeddings"
+    "embeddings": "http://localhost:11434/api/embeddings",
+    "chat": "http://localhost:11434/api/chat"
 }
 MODELS = {
     "embedding": "jina/jina-embeddings-v2-base-en:latest",
     "llm_response": "gemma2:9b-instruct-q5_K_S",
+    "chat": "qwen2:7b",
     "query_generation": "qwen2:1.5b",
     "tts": "tts-1"
 }
@@ -28,7 +30,7 @@ DB_FILE = "assets/movies_faiss.pickle.gz"
 JSON_FILE = "assets/all_movies.json"
 
 app = Flask(__name__)
-CORS(app, resources={r"/search": {"origins": "*"}, r"/completion": {"origins": "*"}})
+CORS(app, resources={r"/search": {"origins": "*"}, r"/completion": {"origins": "*"}, r"/chat": {"origins": "*"}})
 
 def generate_embeddings(text, model=MODELS["embedding"]):
     payload = json.dumps({"model": model, "prompt": text})
@@ -161,14 +163,42 @@ def completion():
         logging.error(f"Error in completion endpoint: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.json
+        messages = data.get('messages', [])
+
+        if not messages:
+            return jsonify({'error': 'No messages provided'}), 400
+
+        payload = {
+            "model": MODELS["chat"],
+            "messages": messages,
+            "stream": True
+        }
+
+        response = requests.post(API_URLS["chat"], json=payload, stream=True)
+        response.raise_for_status()
+
+        def generate():
+            for line in response.iter_lines():
+                if line:
+                    yield f"data: {line.decode('utf-8')}\n\n"
+
+        return Response(generate(), mimetype='text/event-stream')
+    except Exception as e:
+        logging.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/search', methods=['POST'])
 def search():
     try:
         data = request.json
-        query = data.get('query')
-        if not query:
+        if not data or 'query' not in data:
             return jsonify({'error': 'No query provided'}), 400
 
+        query = data['query']
         logging.info(f"Received search query: {query}")
 
         response = search_movies(query, documents, index, original_documents)
