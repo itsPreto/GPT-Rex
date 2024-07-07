@@ -3,65 +3,163 @@ import json
 import numpy as np
 import gzip
 import pickle
-from sentence_transformers import SentenceTransformer
-from hyperdb import HyperDB
+import faiss
 from flask_cors import CORS
 import requests
+from math import sqrt
+import logging
+from tqdm import tqdm
 
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Configuration values
+API_URLS = {
+    "generate": "http://localhost:11434/api/generate",
+    "embeddings": "http://localhost:11434/api/embeddings"
+}
+MODELS = {
+    "embedding": "jina/jina-embeddings-v2-base-en:latest",
+    "llm_response": "gemma2:9b-instruct-q5_K_S",
+    "query_generation": "qwen2:1.5b",
+    "tts": "tts-1"
+}
+DB_FILE = "assets/movies_faiss.pickle.gz"
+JSON_FILE = "assets/all_movies.json"
 
 app = Flask(__name__)
-CORS(app, resources={r"/search": {"origins": "*"}})
+CORS(app, resources={r"/search": {"origins": "*"}, r"/completion": {"origins": "*"}})
 
+def generate_embeddings(text, model=MODELS["embedding"]):
+    payload = json.dumps({"model": model, "prompt": text})
+    headers = {'Content-Type': 'application/json'}
+    try:
+        response = requests.post(API_URLS["embeddings"], data=payload, headers=headers)
+        response.raise_for_status()
+        result = response.json()
+        embeddings = result.get('embedding')
+        if not embeddings:
+            raise ValueError("Invalid embedding format received")
+        return np.array(embeddings, dtype=np.float32)
+    except Exception as e:
+        logging.error(f"Error in generate_embeddings: {str(e)}")
+        return None
 
 def create_and_save_db(json_file, db_file):
     with open(json_file, "r") as f:
         documents = json.load(f)
 
-    overviews = [(doc['overview'], idx) for idx, doc in enumerate(documents) if 'overview' in doc and isinstance(doc['overview'], str)]
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    overview_embeddings = np.array(model.encode([overview for overview, _ in overviews]))
+    overviews = []
+    for idx, doc in enumerate(documents):
+        if 'overview' in doc and isinstance(doc['overview'], str):
+            overviews.append((doc['overview'], idx))
 
-    db = HyperDB(documents=overviews, vectors=overview_embeddings, embedding_function=lambda x: x)
+    print("Generating embeddings...")
+    overview_embeddings = []
+    valid_overviews = []
+    for overview, idx in tqdm(overviews):
+        embedding = generate_embeddings(overview)
+        if embedding is not None:
+            overview_embeddings.append(embedding)
+            valid_overviews.append((overview, idx))
+        else:
+            logging.warning(f"Skipping overview for movie index {idx} due to embedding generation failure")
+
+    overview_embeddings = np.array(overview_embeddings, dtype=np.float32)
+    print(f"Generated {len(overview_embeddings)} valid embeddings out of {len(overviews)} total overviews")
+
+    if len(overview_embeddings) == 0:
+        raise ValueError("No valid embeddings were generated")
+
+    dim = overview_embeddings.shape[1]
+
+    # Normalize embeddings for cosine similarity
+    faiss.normalize_L2(overview_embeddings)
+
+    # Use IndexFlatIP for cosine similarity
+    index = faiss.IndexFlatIP(dim)
+    index.add(overview_embeddings)
+
+    print(f"Created FAISS index with {index.ntotal} vectors of dimension {dim}")
+
     with gzip.open(db_file, "wb") as f:
-        pickle.dump({'documents': overviews, 'vectors': overview_embeddings}, f)
+        pickle.dump({'documents': valid_overviews, 'index': faiss.serialize_index(index)}, f)
+    print(f"Saved database to {db_file}")
 
 def load_db(db_file):
     with gzip.open(db_file, "rb") as f:
         data = pickle.load(f)
-    return HyperDB(documents=data['documents'], vectors=data['vectors'], embedding_function=lambda x: x)
+    index = faiss.deserialize_index(data['index'])
+    return data['documents'], index
 
-def search_movies(query, db, original_documents, model, top_k=50):
-    query_embedding = model.encode([query])[0]
-    results = db.query(query_embedding, top_k=top_k)
-    response = []
-    for (overview_text, idx), similarity in results:
-        movie = original_documents[idx].copy()  # Make a copy of the movie dict
-        movie['searched_overview'] = overview_text
-        movie['similarity_score'] = float(similarity)  # Convert to Python float
-        # Ensure all keys in the dictionary are strings, and values are JSON serializable
-        movie = {str(key): (float(value) if isinstance(value, np.float32) else value) for key, value in movie.items()}
-        response.append(movie)
-    return response
+def search_movies(query, documents, index, original_documents, top_k=50, min_similarity=0.5):
+    try:
+        query_embedding = generate_embeddings(query)
+        logging.info(f"Generated query embedding with shape: {query_embedding.shape}")
 
-# @app.route('/completion', methods=['POST'])
-# def completion_proxy():
-#     try:
-#         print(request.json)
-#         # Assuming your C++ backend completion endpoint is at http://localhost:5000/completion
-#         cpp_backend_url = 'http://localhost:5000/completion'
+        if query_embedding.shape[0] != index.d:
+            raise ValueError(f"Query embedding dimension ({query_embedding.shape[0]}) does not match index dimension ({index.d})")
 
-#         # Forward the received JSON payload to the C++ backend
-#         response = requests.post(cpp_backend_url, json=request.json)
+        # Normalize query embedding for cosine similarity
+        faiss.normalize_L2(query_embedding.reshape(1, -1))
 
-#         # Check if the request to the backend was successful
-#         if response.status_code == 200:
-#             # Forward the response from the C++ backend to the frontend
-#             return jsonify(response.json()), 200
-#         else:
-#             return jsonify({'error': 'Backend request failed'}), response.status_code
-#     except requests.RequestException as e:
-#         # Handle any exceptions that occur during the request to the C++ backend
-#         return jsonify({'error': str(e)}), 500
+        distances, indices = index.search(query_embedding.reshape(1, -1), top_k)
+
+        response = []
+        for i, idx in enumerate(indices[0]):
+            if idx < len(documents) and distances[0][i] >= min_similarity:
+                overview_text, original_idx = documents[idx]
+                if original_idx < len(original_documents):
+                    movie = original_documents[original_idx].copy()
+                    movie['searched_overview'] = overview_text
+                    movie['similarity_score'] = float(distances[0][i])
+                    movie = {str(key): (float(value) if isinstance(value, (np.float32, np.float64)) else value) for key, value in movie.items()}
+                    response.append(movie)
+                else:
+                    logging.warning(f"Invalid original_idx: {original_idx}")
+            elif distances[0][i] < min_similarity:
+                logging.info(f"Skipping result due to low similarity: {distances[0][i]}")
+            else:
+                logging.warning(f"Invalid index: {idx}")
+
+        # Sort results by similarity score in descending order
+        response.sort(key=lambda x: x['similarity_score'], reverse=True)
+
+        return response
+    except Exception as e:
+        logging.error(f"Error in search_movies: {str(e)}", exc_info=True)
+        raise
+
+@app.route('/completion', methods=['POST'])
+def completion():
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        temperature = data.get('temperature', 0.7)
+        system_prompt = data.get('system_prompt', {}).get('prompt', '')
+
+        if not prompt:
+            return jsonify({'error': 'No prompt provided'}), 400
+
+        payload = {
+            "model": MODELS["query_generation"],
+            "prompt": prompt,
+            "system": system_prompt,
+            "temperature": temperature,
+            "stream": False
+        }
+
+        response = requests.post(API_URLS["generate"], json=payload)
+        response.raise_for_status()
+        result = response.json()
+
+        return jsonify({
+            "content": result.get('response', ''),
+            "finish_reason": "stop"
+        })
+    except Exception as e:
+        logging.error(f"Error in completion endpoint: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/search', methods=['POST'])
 def search():
@@ -70,20 +168,33 @@ def search():
         query = data.get('query')
         if not query:
             return jsonify({'error': 'No query provided'}), 400
-        response = search_movies(query, db, original_documents, model)
+
+        logging.info(f"Received search query: {query}")
+
+        response = search_movies(query, documents, index, original_documents)
+
+        logging.info(f"Search completed. Found {len(response)} results.")
+
         return jsonify(response)
     except Exception as e:
+        logging.error(f"Error in search endpoint: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
-
 if __name__ == "__main__":
-    db_file = "assets/movies_hyperdb.pickle.gz"
-    json_file = "assets/all_movies.json"
-    create_new_db = False  # Set this based on your need
+    create_new_db = False  # Set this to True to recreate the database
+
     if create_new_db:
-        create_and_save_db(json_file, db_file)
-    db = load_db(db_file)
-    with open(json_file, "r") as f:
-        original_documents = json.load(f)
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+        create_and_save_db(JSON_FILE, DB_FILE)
+
+    try:
+        documents, index = load_db(DB_FILE)
+        logging.info(f"Loaded {len(documents)} documents and FAISS index with dimension {index.d}")
+
+        with open(JSON_FILE, "r") as f:
+            original_documents = json.load(f)
+        logging.info(f"Loaded {len(original_documents)} original documents")
+    except Exception as e:
+        logging.error(f"Error loading database: {str(e)}", exc_info=True)
+        raise
+
     app.run(debug=True, port=8081)

@@ -1,0 +1,43 @@
+{
+  "name": "gpt-rex",
+  "version": "1.0.0",
+  "description": "> A lightweight & extremely fast, RAG-powered recommendation engine-- leveraging advanced NLP, prompt engineering, and linear algebra to create a unique and narutal search experience. <img width=\"1317\" alt=\"image\" src=\"https://github.com/itsPreto/GPT-Rex/assets/45348368/1d6747a4-1fe4-4929-9908-daa56c864f86\">",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "webpack serve --mode development --open --hot",
+    "build": "webpack --mode production"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@mui/icons-material": "^5.16.0",
+    "@mui/material": "^5.16.0",
+    "bootstrap": "^5.3.3",
+    "react": "^18.3.1",
+    "react-bootstrap": "^2.10.4",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.2.1"
+  },
+  "resolutions": {
+    "@mui/material": "5.16.0",
+    "@mui/icons-material": "5.16.0",
+    "@emotion/react": "11.11.4",
+    "@emotion/styled": "11.11.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.7",
+    "@babel/preset-env": "^7.24.7",
+    "@babel/preset-react": "^7.24.7",
+    "babel-loader": "^9.1.3",
+    "html-webpack-plugin": "^5.6.0",
+    "webpack": "^5.92.1",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.0.4"
+  }
+}
