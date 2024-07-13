@@ -1,8 +1,8 @@
 # GPT-Rex - A Retrieval Augmented Recommendation Engine
 
 > A lightweight & extremely fast, RAG-powered recommendation engine-- leveraging advanced NLP, prompt engineering, and linear algebra to create a unique and narutal search experience.
-<img width="1317" alt="image" src="https://github.com/itsPreto/GPT-Rex/assets/45348368/1d6747a4-1fe4-4929-9908-daa56c864f86">
-
+<img width="1728" alt="Screenshot 2024-07-13 at 7 37 04 PM" src="https://github.com/user-attachments/assets/8e848d5e-5a71-490e-8eda-0b6a53a4a63b">
+<img width="1728" alt="Screenshot 2024-07-13 at 7 36 27 PM" src="https://github.com/user-attachments/assets/01a79731-c21d-4ad3-8f29-bca6a6b457a8">
 
 ------
 
